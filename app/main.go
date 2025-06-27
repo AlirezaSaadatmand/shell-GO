@@ -4,13 +4,25 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 )
 
+func findExecutable(command string, paths []string) string {
+	for _, dir := range paths {
+		fullPath := filepath.Join(dir, command)
+		if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+			return fullPath
+		}
+	}
+	return ""
+}
+
 var COMMANDS map[string]func([]string)
 var builtin []string
+var paths = strings.Split(os.Getenv("PATH"), ":")
 
 func init() {
 	COMMANDS = map[string]func([]string){
@@ -40,7 +52,19 @@ func main() {
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
 		} else {
-			fmt.Println(command + ": command not found")
+			fullPath := findExecutable(command, paths)
+			if fullPath != "" {
+				cmd := exec.Command(command, args...)
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+
+				err := cmd.Run()
+				if err != nil {
+					fmt.Println("Error:", err)
+				}
+			} else {
+				fmt.Println(command + ": command not found")
+			}
 		}
 	}
 }
@@ -77,15 +101,10 @@ func type_(args []string) {
 	if _, exists := COMMANDS[command]; exists {
 		fmt.Println(args[0] + " is a shell builtin")
 	} else {
-		pathEnv := os.Getenv("PATH")
-		paths := strings.Split(pathEnv, ":")
-
-		for _, dir := range paths {
-			fullPath := filepath.Join(dir, command)
-			if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
-				fmt.Println(command + " is " + fullPath)
-				return
-			}
+		fullPath := findExecutable(command, paths)
+		if fullPath != "" {
+			fmt.Println(command + " is " + fullPath)
+			return
 		}
 		fmt.Println(args[0] + ": not found")
 	}
