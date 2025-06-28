@@ -23,20 +23,24 @@ func findExecutable(command string, paths []string) string {
 
 func separateCommandArgs(input string) (command string, args []string) {
 	if input[0] == '"' {
-		for i, _ := range input[1:] {
+		i := 1
+		for i < len(input) {
 			if input[i] == '"' {
 				command = input[:i + 1]
 				input = input[i + 1:]
 				break
 			}
+			i++
 		}
 	} else if input[0] == '\'' {
-		for i, _ := range input[1:] {
+		i := 1
+		for i < len(input) {		
 			if input[i] == '\'' {
 				command = input[:i + 1]
 				input = input[i + 1:]
 				break
 			}
+			i++
 		}
 	} else {
 		command = strings.Split(input, " ")[0]
@@ -146,7 +150,7 @@ func main() {
 			os.Exit(1)
 		}
 		command, args := separateCommandArgs(input[:len(input)-1])
-
+		fmt.Println(command , args)
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
 		} else {
