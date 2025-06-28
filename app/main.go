@@ -26,7 +26,7 @@ func separateCommandArgs(input string) (command string, args []string) {
 		i := 1
 		for i < len(input) {
 			if input[i] == '"' {
-				command = input[:i + 1]
+				command = input[1:i]
 				input = input[i + 1:]
 				break
 			}
@@ -36,7 +36,7 @@ func separateCommandArgs(input string) (command string, args []string) {
 		i := 1
 		for i < len(input) {		
 			if input[i] == '\'' {
-				command = input[:i + 1]
+				command = input[1:i]
 				input = input[i + 1:]
 				break
 			}
