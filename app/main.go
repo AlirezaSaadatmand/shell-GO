@@ -47,7 +47,7 @@ func separateArgs(input string) []string {
 			}
 			i++
 		case ' ', '\t':
-			if inSingleQuote {
+			if inSingleQuote || inDoubleQuote{
 				current.WriteByte(ch)
 				i++
 			} else {
