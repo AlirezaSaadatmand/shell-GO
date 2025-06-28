@@ -50,6 +50,11 @@ func separateArgs(input string) []string {
 				current.WriteByte(ch)
 			}
 			i++
+		case '\\':
+			if !inSingleQuote && !inDoubleQuote {
+				current.WriteByte(input[i + 1])
+				i += 2
+			}
 		case ' ', '\t':
 			if inSingleQuote || inDoubleQuote{
 				current.WriteByte(ch)
