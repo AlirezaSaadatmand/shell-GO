@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 func findExecutable(command string, paths []string) string {
@@ -18,6 +19,51 @@ func findExecutable(command string, paths []string) string {
 		}
 	}
 	return ""
+}
+
+func separateArgs(input string) []string {
+	var result []string
+	var current strings.Builder
+	inSingleQuote := false
+	i := 0
+
+	for i < len(input) {
+		ch := input[i]
+
+		switch ch {
+		case '\'':
+			if inSingleQuote {
+				inSingleQuote = false
+			} else {
+				inSingleQuote = true
+			}
+			i++
+
+		case ' ', '\t':
+			if inSingleQuote {
+				current.WriteByte(ch)
+				i++
+			} else {
+				if current.Len() > 0 {
+					result = append(result, current.String())
+					current.Reset()
+				}
+				for i < len(input) && unicode.IsSpace(rune(input[i])) {
+					i++
+				}
+			}
+
+		default:
+			current.WriteByte(ch)
+			i++
+		}
+	}
+
+	if current.Len() > 0 {
+		result = append(result, current.String())
+	}
+
+	return result
 }
 
 var COMMANDS map[string]func([]string)
@@ -47,7 +93,7 @@ func main() {
 		}
 		input = input[:len(input)-1]
 		command := strings.Split(input, " ")[0]
-		args := strings.Split(input, " ")[1:]
+		args := separateArgs(strings.Join(strings.Split(input, " ")[1:], " "))
 
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
