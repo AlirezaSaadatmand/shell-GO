@@ -25,20 +25,27 @@ func separateArgs(input string) []string {
 	var result []string
 	var current strings.Builder
 	inSingleQuote := false
+	inDoubleQuote := false
 	i := 0
 
 	for i < len(input) {
 		ch := input[i]
 
 		switch ch {
-		case '"':
-			if inSingleQuote {
-				inSingleQuote = false
-			} else {
+		case '\'':
+			if !inSingleQuote && !inDoubleQuote {
 				inSingleQuote = true
+			} else if inSingleQuote {
+				inSingleQuote = false
 			}
 			i++
-
+		case '"':
+			if !inSingleQuote && !inDoubleQuote {
+				inDoubleQuote = true
+			} else if inDoubleQuote {
+				inDoubleQuote = false
+			}
+			i++
 		case ' ', '\t':
 			if inSingleQuote {
 				current.WriteByte(ch)
