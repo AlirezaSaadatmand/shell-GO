@@ -122,18 +122,16 @@ func main() {
 			continue
 		}
 		command, args := separateCommandArgs(input[:len(input)-1])
+		fmt.Println(command)
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
 		} else {
 			fullPath := command
-			if !filepath.IsAbs(command) && !strings.HasPrefix(command, "./") && !strings.Contains(command, "/") {
-				// not absolute, not relative, not subdir
-				// check current directory first
-				if info, err := os.Stat(command); err == nil && info.Mode().Perm()&0111 != 0 {
-					fullPath = "./" + command
-				} else {
-					fullPath = findExecutable(command, paths)
-				}
+
+			if info, err := os.Stat(command); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+				fullPath = command
+			} else {
+				fullPath = findExecutable(command, paths)
 			}
 			if fullPath != "" {
 				cmd := exec.Command(fullPath, args...)
