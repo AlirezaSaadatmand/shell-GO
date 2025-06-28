@@ -26,7 +26,7 @@ func separateCommandArgs(input string) (command string, args []string) {
 		i := 1
 		for i < len(input) {
 			if input[i] == '"' {
-				command = input[1:i]
+				command = input[:i]
 				input = input[i + 1:]
 				break
 			}
@@ -36,7 +36,7 @@ func separateCommandArgs(input string) (command string, args []string) {
 		i := 1
 		for i < len(input) {		
 			if input[i] == '\'' {
-				command = input[1:i]
+				command = input[:i]
 				input = input[i + 1:]
 				break
 			}
@@ -155,6 +155,7 @@ func main() {
 			COMMANDS[command](args)
 		} else {
 			if command[0] == '"' || command[0] == '\'' {
+				command = command[1:]
 				cmd := exec.Command(command, args...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
