@@ -122,7 +122,6 @@ func main() {
 			continue
 		}
 		command, args := separateCommandArgs(input[:len(input)-1])
-		fmt.Println(command)
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
 		} else {
