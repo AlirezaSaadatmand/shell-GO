@@ -57,12 +57,8 @@ func separateCommandArgs(input string) (string, []string) {
 				current.WriteByte('\\')
 				i++
 			} else if inDoubleQuote {
-				if next == '"' || next == '\\' || next == '\'' || next == '$' {
-					current.WriteByte(next)
-				} else {
-					current.WriteByte('\\')
-					current.WriteByte(next)
-				}
+				// Only escape ", \, $, `
+				current.WriteByte(next)
 				i += 2
 			} else {
 				current.WriteByte(next)
@@ -130,10 +126,14 @@ func main() {
 			COMMANDS[command](args)
 		} else {
 			fullPath := command
-			if info, err := os.Stat(command); err == nil && info.Mode().Perm()&0111 != 0 {
-				fullPath = "./" + command
-			} else {
-				fullPath = findExecutable(command, paths)
+			if !filepath.IsAbs(command) && !strings.HasPrefix(command, "./") && !strings.Contains(command, "/") {
+				// not absolute, not relative, not subdir
+				// check current directory first
+				if info, err := os.Stat(command); err == nil && info.Mode().Perm()&0111 != 0 {
+					fullPath = "./" + command
+				} else {
+					fullPath = findExecutable(command, paths)
+				}
 			}
 			if fullPath != "" {
 				cmd := exec.Command(fullPath, args...)
