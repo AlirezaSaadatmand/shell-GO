@@ -129,9 +129,8 @@ func main() {
 
 			if info, err := os.Stat(command); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
 				fullPath = command
-			} else {
+			} else if command == "cat" {
 				fullPath = findExecutable(command, paths)
-			}
 			if fullPath != "" {
 				cmd := exec.Command(fullPath, args...)
 				cmd.Stdout = os.Stdout
