@@ -21,33 +21,8 @@ func findExecutable(command string, paths []string) string {
 	return ""
 }
 
-func separateCommandArgs(input string) (command string, args []string) {
-	if input[0] == '"' {
-		i := 1
-		for i < len(input) {
-			if input[i] == '"' {
-				command = input[:i]
-				input = input[i + 1:]
-				break
-			}
-			i++
-		}
-	} else if input[0] == '\'' {
-		i := 1
-		for i < len(input) {		
-			if input[i] == '\'' {
-				command = input[:i]
-				input = input[i + 1:]
-				break
-			}
-			i++
-		}
-	} else {
-		command = strings.Split(input, " ")[0]
-		input = strings.Join(strings.Split(input, " ")[1:], "")
-	}
-
-
+func separateCommandArgs(input string) (string, []string) {
+	var args []string
 	var current strings.Builder
 	inSingleQuote := false
 	inDoubleQuote := false
@@ -58,20 +33,16 @@ func separateCommandArgs(input string) (command string, args []string) {
 
 		switch ch {
 		case '\'':
-			if !inSingleQuote && !inDoubleQuote {
-				inSingleQuote = true
-			} else if inSingleQuote {
-				inSingleQuote = false
-			} else if inDoubleQuote {
+			if !inDoubleQuote {
+				inSingleQuote = !inSingleQuote
+			} else {
 				current.WriteByte(ch)
 			}
 			i++
 		case '"':
-			if !inSingleQuote && !inDoubleQuote {
-				inDoubleQuote = true
-			} else if inDoubleQuote {
-				inDoubleQuote = false
-			} else if inSingleQuote {
+			if !inSingleQuote {
+				inDoubleQuote = !inDoubleQuote
+			} else {
 				current.WriteByte(ch)
 			}
 			i++
@@ -80,25 +51,15 @@ func separateCommandArgs(input string) (command string, args []string) {
 				current.WriteByte('\\')
 				i++
 			} else if i+1 < len(input) {
-				if inDoubleQuote {
-					next := input[i+1]
-					if next == '\\' || next == '"' || next == '$' || next == '`' {
-						current.WriteByte(next)
-					} else {
-						current.WriteByte('\\')
-						current.WriteByte(next)
-					}
-					i += 2
-				} else {
-					current.WriteByte(input[i+1])
-					i += 2
-				}
+				next := input[i+1]
+				current.WriteByte(next)
+				i += 2
 			} else {
 				current.WriteByte('\\')
 				i++
 			}
 		case ' ', '\t':
-			if inSingleQuote || inDoubleQuote{
+			if inSingleQuote || inDoubleQuote {
 				current.WriteByte(ch)
 				i++
 			} else {
@@ -110,19 +71,21 @@ func separateCommandArgs(input string) (command string, args []string) {
 					i++
 				}
 			}
-
 		default:
 			current.WriteByte(ch)
 			i++
 		}
 	}
-
 	if current.Len() > 0 {
 		args = append(args, current.String())
 	}
 
-	return 
+	if len(args) == 0 {
+		return "", []string{}
+	}
+	return args[0], args[1:]
 }
+
 
 var COMMANDS map[string]func([]string)
 var builtin []string
@@ -148,36 +111,29 @@ func main() {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Error reading input:", err)
 			os.Exit(1)
+		}	 
+		if strings.TrimSpace(input) == "" {
+			continue
 		}
 		command, args := separateCommandArgs(input[:len(input)-1])
 
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
 		} else {
-			if command[0] == '"' || command[0] == '\'' {
-				command = command[1:]
-				cmd := exec.Command(command, args...)
+			fullPath := command
+			if !filepath.IsAbs(command) && !strings.HasPrefix(command, "./") {
+				fullPath = findExecutable(command, paths)
+			}
+			if fullPath != "" {
+				cmd := exec.Command(fullPath, args...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
-
-				err := cmd.Run()
-				if err != nil {
-					fmt.Println("Error:", err)
+				cmd.Stdin = os.Stdin
+				if err := cmd.Run(); err != nil {
+					fmt.Fprintln(os.Stderr, "Error:", err)
 				}
 			} else {
-				fullPath := findExecutable(command, paths)
-				if fullPath != "" {
-					cmd := exec.Command(command, args...)
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = os.Stderr
-
-					err := cmd.Run()
-					if err != nil {
-						fmt.Println("Error:", err)
-					}
-				} else {
-					fmt.Println(command + ": command not found")
-				}
+				fmt.Fprintln(os.Stderr, command+": command not found")
 			}
 		}
 	}
