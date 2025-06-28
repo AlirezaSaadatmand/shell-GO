@@ -27,6 +27,7 @@ func separateCommandArgs(input string) (command string, args []string) {
 			if input[i] == '"' {
 				command = input[:i + 1]
 				input = input[i + 1:]
+				break
 			}
 		}
 	} else if input[0] == '\'' {
@@ -34,6 +35,7 @@ func separateCommandArgs(input string) (command string, args []string) {
 			if input[i] == '\'' {
 				command = input[:i + 1]
 				input = input[i + 1:]
+				break
 			}
 		}
 	} else {
