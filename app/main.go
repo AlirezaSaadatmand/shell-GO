@@ -51,9 +51,26 @@ func separateArgs(input string) []string {
 			}
 			i++
 		case '\\':
-			if !inSingleQuote && !inDoubleQuote {
-				current.WriteByte(input[i + 1])
-				i += 2
+			if inSingleQuote {
+				current.WriteByte('\\')
+				i++
+			} else if i+1 < len(input) {
+				if inDoubleQuote {
+					next := input[i+1]
+					if next == '\\' || next == '"' || next == '$' || next == '`' {
+						current.WriteByte(next)
+					} else {
+						current.WriteByte('\\')
+						current.WriteByte(next)
+					}
+					i += 2
+				} else {
+					current.WriteByte(input[i+1])
+					i += 2
+				}
+			} else {
+				current.WriteByte('\\')
+				i++
 			}
 		case ' ', '\t':
 			if inSingleQuote || inDoubleQuote{
