@@ -37,6 +37,8 @@ func separateArgs(input string) []string {
 				inSingleQuote = true
 			} else if inSingleQuote {
 				inSingleQuote = false
+			} else if inDoubleQuote {
+				current.WriteByte(ch)
 			}
 			i++
 		case '"':
@@ -44,6 +46,8 @@ func separateArgs(input string) []string {
 				inDoubleQuote = true
 			} else if inDoubleQuote {
 				inDoubleQuote = false
+			} else if inSingleQuote {
+				current.WriteByte(ch)
 			}
 			i++
 		case ' ', '\t':
