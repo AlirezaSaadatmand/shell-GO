@@ -154,8 +154,7 @@ func main() {
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
 		} else {
-			fullPath := findExecutable(command, paths)
-			if fullPath != "" {
+			if command[0] == '"' || command[0] == '\'' {
 				cmd := exec.Command(command, args...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
@@ -165,7 +164,19 @@ func main() {
 					fmt.Println("Error:", err)
 				}
 			} else {
-				fmt.Println(command + ": command not found")
+				fullPath := findExecutable(command, paths)
+				if fullPath != "" {
+					cmd := exec.Command(command, args...)
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+
+					err := cmd.Run()
+					if err != nil {
+						fmt.Println("Error:", err)
+					}
+				} else {
+					fmt.Println(command + ": command not found")
+				}
 			}
 		}
 	}
