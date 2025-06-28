@@ -21,8 +21,27 @@ func findExecutable(command string, paths []string) string {
 	return ""
 }
 
-func separateArgs(input string) []string {
-	var result []string
+func separateCommandArgs(input string) (command string, args []string) {
+	if input[0] == '"' {
+		for i, _ := range input[1:] {
+			if input[i] == '"' {
+				command = input[:i + 1]
+				input = input[i + 1:]
+			}
+		}
+	} else if input[0] == '\'' {
+		for i, _ := range input[1:] {
+			if input[i] == '\'' {
+				command = input[:i + 1]
+				input = input[i + 1:]
+			}
+		}
+	} else {
+		command = strings.Split(input, " ")[0]
+		input = strings.Join(strings.Split(input, " ")[1:], "")
+	}
+
+
 	var current strings.Builder
 	inSingleQuote := false
 	inDoubleQuote := false
@@ -78,7 +97,7 @@ func separateArgs(input string) []string {
 				i++
 			} else {
 				if current.Len() > 0 {
-					result = append(result, current.String())
+					args = append(args, current.String())
 					current.Reset()
 				}
 				for i < len(input) && unicode.IsSpace(rune(input[i])) {
@@ -93,10 +112,10 @@ func separateArgs(input string) []string {
 	}
 
 	if current.Len() > 0 {
-		result = append(result, current.String())
+		args = append(args, current.String())
 	}
 
-	return result
+	return 
 }
 
 var COMMANDS map[string]func([]string)
@@ -124,9 +143,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Error reading input:", err)
 			os.Exit(1)
 		}
-		input = input[:len(input)-1]
-		command := strings.Split(input, " ")[0]
-		args := separateArgs(strings.Join(strings.Split(input, " ")[1:], " "))
+		command, args := separateCommandArgs(input[:len(input)-1])
 
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
