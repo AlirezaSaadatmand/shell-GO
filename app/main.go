@@ -31,7 +31,7 @@ func separateArgs(input string) []string {
 		ch := input[i]
 
 		switch ch {
-		case '\'':
+		case '"':
 			if inSingleQuote {
 				inSingleQuote = false
 			} else {
