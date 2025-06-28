@@ -150,7 +150,7 @@ func main() {
 			os.Exit(1)
 		}
 		command, args := separateCommandArgs(input[:len(input)-1])
-		fmt.Println(command , args)
+
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
 		} else {
