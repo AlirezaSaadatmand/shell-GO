@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"strings"
 	"sync"
 	"unicode"
-	
+
 	"github.com/chzyer/readline"
 )
 
@@ -410,9 +411,27 @@ func executePipeline(line string) bool {
 	return true
 }
 
+func loadHistoryFromFile(path string) {
+	file, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) != "" {
+			shellHistory = append(shellHistory, line)
+		}
+	}
+	historyAppendIndex = len(shellHistory)
+}
+
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
 var paths = strings.Split(os.Getenv("PATH"), ":")
+var histFile = os.Getenv("HISTFILE")
 var shellHistory []string
 var historyAppendIndex int
 
@@ -435,6 +454,9 @@ func init() {
 	}
 }
 func main() {
+	if histFile != "" {
+		loadHistoryFromFile(histFile)
+	}
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "$ ",
 		HistoryFile:     "/tmp/readline.tmp",
@@ -479,6 +501,15 @@ func main() {
 					fmt.Fprintln(os.Stderr, command+": command not found")
 				}
 			}
+		}
+	}
+	if histFile != "" {
+		file, err := os.Create(histFile)
+		if err == nil {
+			for _, entry := range shellHistory {
+				fmt.Fprintln(file, entry)
+			}
+			file.Close()
 		}
 	}
 }
@@ -585,21 +616,28 @@ func cd(args []string, out *Output) {
 }
 
 func history(args []string, out *Output) {
-    if len(args) == 2 && args[0] == "-a" {
-        path := args[1]
-        file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-        if err != nil {
-            fmt.Fprintln(out.Stderr, "history: cannot append to file:", err)
-            return
-        }
-        defer file.Close()
+	if len(args) == 0 {
+		for i, entry := range shellHistory {
+			fmt.Fprintf(out.Stdout, "    %d  %s\n", i+1, entry)
+		}
+		return
+	}
 
-        for _, entry := range shellHistory[historyAppendIndex:] {
-            fmt.Fprintln(file, entry)
-        }
+	if len(args) == 2 && args[0] == "-a" {
+		path := args[1]
+		file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			fmt.Fprintln(out.Stderr, "history: cannot append to file:", err)
+			return
+		}
+		defer file.Close()
 
-        historyAppendIndex = len(shellHistory)
-        return
+		for _, entry := range shellHistory[historyAppendIndex:] {
+			fmt.Fprintln(file, entry)
+		}
+
+		historyAppendIndex = len(shellHistory)
+		return
 	}
 
 	if len(args) == 2 && args[0] == "-r" {
@@ -654,7 +692,6 @@ func history(args []string, out *Output) {
 		fmt.Fprintf(out.Stdout, "%5d  %s\n", i+1, shellHistory[i])
 	}
 }
-
 
 func execute(command string, args []string, out *Output) bool {
 	fullPath := findExecutable(command, paths)
