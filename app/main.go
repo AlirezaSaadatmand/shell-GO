@@ -33,36 +33,25 @@ func separateCommandArgs(input string) (string, []string) {
 
 		switch ch {
 		case '\'':
+			current.WriteByte(ch)
 			if !inDoubleQuote {
 				inSingleQuote = !inSingleQuote
-			} else {
-				current.WriteByte(ch)
 			}
 			i++
 		case '"':
+			current.WriteByte(ch)
 			if !inSingleQuote {
 				inDoubleQuote = !inDoubleQuote
-			} else {
-				current.WriteByte(ch)
 			}
 			i++
 		case '\\':
-			if i+1 >= len(input) {
-				current.WriteByte('\\')
-				i++
-				break
-			}
-			next := input[i+1]
-			if inSingleQuote {
-				current.WriteByte('\\')
-				i++
-			} else if inDoubleQuote {
-				// Only escape ", \, $, `
-				current.WriteByte(next)
+			if i+1 < len(input) {
+				current.WriteByte(ch)
+				current.WriteByte(input[i+1])
 				i += 2
 			} else {
-				current.WriteByte(next)
-				i += 2
+				current.WriteByte(ch)
+				i++
 			}
 		case ' ', '\t':
 			if inSingleQuote || inDoubleQuote {
@@ -88,11 +77,6 @@ func separateCommandArgs(input string) (string, []string) {
 
 	if len(args) == 0 {
 		return "", []string{}
-	}
-	for i, arg := range args {
-		if len(arg) >= 2 && ((arg[0] == '\'' && arg[len(arg)-1] == '\'') || (arg[0] == '"' && arg[len(arg)-1] == '"')) {
-			args[i] = arg[1 : len(arg)-1]
-		}
 	}
 	return args[0], args[1:]
 }
@@ -131,10 +115,7 @@ func main() {
 			COMMANDS[command](args)
 		} else {
 			fullPath := command
-			fmt.Fprintf(os.Stderr, "DEBUG: checking command: [%s]\n", command)
-			
 			if info, err := os.Stat(command); err == nil && info.Mode().IsRegular(){
-				fmt.Fprintf(os.Stderr, "DEBUG: file exists: %v\n", info.Name())
 				fullPath = command
 			} else {
 				fullPath = findExecutable(command, paths)
