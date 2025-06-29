@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -179,6 +180,13 @@ func separateCommandArgs(input string) (string, []string) {
 
 	return args[0], args[1:]
 }
+func isBuiltin(cmd string) bool {
+	if exists := slices.Contains(builtin, cmd); exists {
+		return true
+	} else {
+		return false
+	}
+}
 func listDirectories(string) []string {
 	files, err := os.ReadDir(".")
 	if err != nil {
@@ -194,10 +202,9 @@ func listDirectories(string) []string {
 }
 
 func completeCommands(prefix string) [][]rune {
-	seen := make(map[string]bool)
 	var result [][]rune
+	seen := make(map[string]bool)
 
-	// Add builtins
 	for _, b := range builtin {
 		if strings.HasPrefix(b, prefix) && !seen[b] {
 			seen[b] = true
@@ -205,7 +212,6 @@ func completeCommands(prefix string) [][]rune {
 		}
 	}
 
-	// Add executables from PATH
 	for _, dir := range paths {
 		files, err := os.ReadDir(dir)
 		if err != nil {
@@ -214,16 +220,14 @@ func completeCommands(prefix string) [][]rune {
 		for _, f := range files {
 			name := f.Name()
 			if strings.HasPrefix(name, prefix) && !seen[name] {
-				fullPath := filepath.Join(dir, name)
-				if info, err := os.Stat(fullPath); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
-					seen[name] = true
-					result = append(result, []rune(name))
-				}
+				seen[name] = true
+				result = append(result, []rune(name))
 			}
 		}
 	}
 	return result
 }
+
 
 func isExecutable(path string) bool {
 	info, err := os.Stat(path)
@@ -234,84 +238,52 @@ func isExecutable(path string) bool {
 }
 
 func completeDirs(prefix string) [][]rune {
-    var result [][]rune
-    var searchDir string
-    var partial string
-
-    // Handle absolute paths
-    if filepath.IsAbs(prefix) {
-        searchDir = filepath.Dir(prefix)
-        partial = filepath.Base(prefix)
-    } else {
-        // Handle relative paths
-        dir, file := filepath.Split(prefix)
-        if dir == "" {
-            searchDir = "."
-            partial = file
-        } else {
-            searchDir = dir
-            partial = file
-        }
-    }
-
-    files, err := os.ReadDir(searchDir)
-    if err != nil {
-        return nil
-    }
-
-    for _, f := range files {
-        if f.IsDir() && strings.HasPrefix(f.Name(), partial) {
-            fullPath := filepath.Join(searchDir, f.Name())
-            // Append separator only if not already present
-            if !strings.HasSuffix(fullPath, string(filepath.Separator)) {
-                fullPath += string(filepath.Separator)
-            }
-            result = append(result, []rune(fullPath))
-        }
-    }
-    return result
+	files, _ := os.ReadDir(".")
+	var result [][]rune
+	for _, f := range files {
+		if f.IsDir() && strings.HasPrefix(f.Name(), prefix) {
+			suffix := f.Name()[len(prefix):]
+			result = append(result, []rune(suffix))
+		}
+	}
+	return result
 }
-
 type AutoCompleter struct{}
 
 func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
-    // Find the start of the current word
-    start := pos
-    for start > 0 && !unicode.IsSpace(rune(line[start-1])) {
-        start--
-    }
-    current := string(line[start:pos])
+	start := pos
+	for start > 0 && !unicode.IsSpace(line[start-1]) {
+		start--
+	}
+	current := string(line[start:pos])
 
-    // If we're at the beginning of the line
-    if start == 0 {
-        completions := completeCommands(current)
+	// At the beginning: command completion
+	if start == 0 {
+		suggestions := completeCommands(current)
 
-        if current != "" {
-            if len(completions) == 0 {
-                // Ring the bell for invalid command
-                fmt.Fprint(os.Stderr, "\a")
-                return nil, pos
-            }
+		// IMPORTANT: transform full suggestions into suffixes
+		// to avoid duplication when readline inserts at `start`
+		for i := range suggestions {
+			full := string(suggestions[i])
+			if strings.HasPrefix(full, current) {
+				suggestions[i] = []rune(full[len(current):])
+			}
+		}
 
-            if len(completions) == 1 {
-                return [][]rune{completions[0]}, start
-            }
-        }
+		return suggestions, pos // <-- insert *after* cursor
+	}
 
-        return completions, start
-    }
-
-    // Otherwise, complete directories
-    completions := completeDirs(current)
-    if len(completions) > 0 {
-        if len(completions) == 1 {
-            return [][]rune{completions[0]}, start
-        }
-        return completions, start
-    }
-
-    return nil, pos
+	// Not a command: file/directory suggestions
+	suggestions := completeDirs(current)
+	for i := range suggestions {
+		full := string(suggestions[i])
+		if strings.HasPrefix(full, current) {
+			suggestions[i] = []rune(full[len(current):])
+		}
+	}
+	return suggestions, pos // same reason: insert after
 }
+
 
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
