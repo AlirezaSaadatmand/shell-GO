@@ -188,12 +188,14 @@ func init() {
 		"echo": echo,
 		"type": type_,
 		"pwd": pwd,
+		"cd": cd
 	}
 	builtin = []string{
 		"exit",
 		"echo",
 		"type",
 		"pwd",
+		"cd",	
 	}
 }
 func main() {
@@ -276,6 +278,59 @@ func pwd(args []string, out *Output) {
 		fmt.Fprintln(out.Stdout, dir)
 	}
 }
+
+var lastDir string
+
+func cd(args []string, out *Output) {
+	var targetDir string
+
+	// Get current directory before changing
+	currentDir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(out.Stderr, "cd: failed to get current directory:", err)
+		return
+	}
+
+	// Determine the target directory
+	if len(args) == 0 {
+		// cd → go to $HOME
+		home := os.Getenv("HOME")
+		if home == "" {
+			fmt.Fprintln(out.Stderr, "cd: HOME not set")
+			return
+		}
+		targetDir = home
+	} else if args[0] == "-" {
+		// cd - → go to previous directory
+		if lastDir == "" {
+			fmt.Fprintln(out.Stderr, "cd: OLDPWD not set")
+			return
+		}
+		targetDir = lastDir
+		fmt.Fprintln(out.Stdout, targetDir) // print the path like real shell
+	} else if strings.HasPrefix(args[0], "~") {
+		// cd ~ or cd ~/something
+		home := os.Getenv("HOME")
+		if home == "" {
+			fmt.Fprintln(out.Stderr, "cd: HOME not set")
+			return
+		}
+		targetDir = filepath.Join(home, strings.TrimPrefix(args[0], "~"))
+	} else {
+		// cd some/path → treat as-is (absolute or relative)
+		targetDir = args[0]
+	}
+
+	// Try to change directory
+	if err := os.Chdir(targetDir); err != nil {
+		fmt.Fprintf(out.Stderr, "cd: %v\n", err)
+		return
+	}
+
+	// Save previous directory
+	lastDir = currentDir
+}
+
 
 func execute(command string, args []string, out *Output) bool {
 	fullPath := findExecutable(command, paths)
