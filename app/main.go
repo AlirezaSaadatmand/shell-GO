@@ -11,6 +11,15 @@ import (
 	"unicode"
 )
 
+func hasRdirection (args []string) ([]string, string) {
+	for i, _ := range args {
+		if args[i] == ">" || args[i] == "1>" {
+			return args[:i], args[i + 1]
+		}
+	}
+	return args, ""
+}
+
 func findExecutable(command string, paths []string) string {
 	for _, dir := range paths {
 		fullPath := filepath.Join(dir, command)
@@ -99,12 +108,12 @@ func separateCommandArgs(input string) (string, []string) {
 }
 
 
-var COMMANDS map[string]func([]string)
+var COMMANDS map[string]func([]string, string)
 var builtin []string
 var paths = strings.Split(os.Getenv("PATH"), ":")
 
 func init() {
-	COMMANDS = map[string]func([]string){
+	COMMANDS = map[string]func([]string, string){
 		"exit": exit,
 		"echo": echo,
 		"type": type_,
@@ -128,30 +137,18 @@ func main() {
 			continue
 		}
 		command, args := separateCommandArgs(input[:len(input)-1])
+		args, output := hasRdirection(args)
 		if _, ok := COMMANDS[command]; ok {
-			COMMANDS[command](args)
+			COMMANDS[command](args,output)
 		} else {
-			fullPath := findExecutable(command, paths)
-
-			if fullPath != "" {
-				cmd := &exec.Cmd{
-					Path: fullPath,
-					Args: append([]string{command}, args...),
-					Stdin:  os.Stdin,
-					Stdout: os.Stdout,
-					Stderr: os.Stderr,
-				}
-				if err := cmd.Run(); err != nil {
-					fmt.Fprintln(os.Stderr, "Error:", err)
-				}
-			} else {
+			if !execute(command , args, output) {
 				fmt.Fprintln(os.Stderr, command+": command not found")
 			}
 		}
 	}
 }
 
-func exit(args []string) {
+func exit(args []string, output string) {
 	if len(args) != 1 {
 		fmt.Println("Error: expected exactly one argument")
 		return
@@ -165,29 +162,87 @@ func exit(args []string) {
 	os.Exit(status)
 }
 
-func echo(args []string) {
+func echo(args []string, output string) {
 	if len(args) < 1 {
 		fmt.Println("Error: not enough aguments")
 		return
 	}
-	fmt.Println(strings.Join(args, " "))
+	if output == "" {
+		fmt.Fprintln(os.Stdout, strings.Join(args, " "))
+	} else {
+		file, err := os.Create(output)
+		if err != nil {
+        	fmt.Println("Error:", err)
+        	return
+    	}
+	    defer file.Close()
+		file.WriteString(strings.Join(args, " "))
+	}
 }
 
-func type_(args []string) {
+func type_(args []string, output string) {
 	if len(args) != 1 {
 		fmt.Println("Error: expected exactly one argument")
 		return
 	}
 	command := args[0]
-
+	var outputText string
 	if _, exists := COMMANDS[command]; exists {
-		fmt.Println(args[0] + " is a shell builtin")
+		outputText = args[0] + " is a shell builtin"
 	} else {
 		fullPath := findExecutable(command, paths)
 		if fullPath != "" {
-			fmt.Println(command + " is " + fullPath)
-			return
+			outputText = command + " is " + fullPath
+		} else {
+			outputText = args[0] + ": not found"
 		}
-		fmt.Println(args[0] + ": not found")
 	}
+	if output == "" {
+		fmt.Fprintln(os.Stdout, outputText)
+	} else {
+		file, err := os.Create(output)
+		if err != nil {
+        	fmt.Println("Error:", err)
+        	return
+    	}
+	    defer file.Close()
+		file.WriteString(outputText)
+	}
+}
+
+func execute(command string, args []string, output string) bool {
+	fullPath := findExecutable(command, paths)
+	if fullPath == "" {
+		return false
+	}
+
+	var outFile *os.File
+	var err error
+
+	if output != "" {
+		outFile, err = os.Create(output)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error creating output file:", err)
+			return false
+		}
+		defer outFile.Close()
+	}
+
+	cmd := &exec.Cmd{
+		Path:   fullPath,
+		Args:   append([]string{command}, args...),
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+	}
+
+	if output != "" {
+		cmd.Stdout = outFile
+	}
+
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error:", err)
+	}
+
+	return true
 }
