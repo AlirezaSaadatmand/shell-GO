@@ -187,11 +187,13 @@ func init() {
 		"exit": exit,
 		"echo": echo,
 		"type": type_,
+		"pwd": pwd,
 	}
 	builtin = []string{
 		"exit",
 		"echo",
 		"type",
+		"pwd",
 	}
 }
 func main() {
@@ -246,7 +248,6 @@ func echo(args []string, out *Output) {
 	}
 }
 
-
 func type_(args []string, out *Output) {
 
 	command := args[0]
@@ -264,6 +265,15 @@ func type_(args []string, out *Output) {
 	_, err := fmt.Fprintln(out.Stdout, outputText)
 	if err != nil {
 		fmt.Fprintln(out.Stderr, "Error writing to stdout:", err)
+	}
+}
+
+func pwd(args []string, out *Output) {
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(out.Stderr, "Error writing to stdout:", err)
+	} else {
+		fmt.Fprintln(out.Stdout, dir)
 	}
 }
 
