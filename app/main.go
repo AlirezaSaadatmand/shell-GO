@@ -114,12 +114,7 @@ func main() {
 		if _, ok := COMMANDS[command]; ok {
 			COMMANDS[command](args)
 		} else {
-			fullPath := command
-			if info, err := os.Stat(command); err == nil && info.Mode().IsRegular(){
-				fullPath = command
-			} else {
-				fullPath = findExecutable(command, paths)
-			}
+			fullPath := findExecutable(command, paths)
 			if fullPath != "" {
 				cmd := exec.Command(fullPath, args...)
 				cmd.Stdout = os.Stdout
