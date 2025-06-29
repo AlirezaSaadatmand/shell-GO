@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -193,18 +194,66 @@ func listDirectories(string) []string {
 	return dirs
 }
 
+func isBuiltin(cmd string) bool {
+	if exists := slices.Contains(builtin, cmd); exists {
+		return true
+	} else {
+		return false
+	}
+}
+
+func completeBuiltins(prefix string) [][]rune {
+	var result [][]rune
+	for _, b := range builtin {
+		if strings.HasPrefix(b, prefix) {
+			result = append(result, []rune(b))
+		}
+	}
+	return result
+}
+
+func completeDirs(prefix string) [][]rune {
+	files, _ := os.ReadDir(".")
+	var result [][]rune
+	for _, f := range files {
+		if f.IsDir() && strings.HasPrefix(f.Name(), prefix) {
+			result = append(result, []rune(f.Name()))
+		}
+	}
+	return result
+}
+
+type AutoCompleter struct{}
+
+func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
+	input := string(line[:pos])
+	tokens := strings.Fields(input)
+
+	if len(tokens) == 0 {
+		// No input yet → suggest all builtins
+		return completeBuiltins(""), 0
+	}
+
+	// Command position
+	if len(tokens) == 1 {
+		cmd := tokens[0]
+		// If not builtin and not executable → ring bell
+		if !isBuiltin(cmd) && findExecutable(cmd, paths) == "" {
+			fmt.Print("\a") // Ring bell
+			return nil, 0
+		}
+		return completeBuiltins(cmd), 0
+	}
+
+	// Argument position — autocomplete directory names
+	lastToken := tokens[len(tokens)-1]
+	return completeDirs(lastToken), len(lastToken)
+}
+
+
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
 var paths = strings.Split(os.Getenv("PATH"), ":")
-var completer = readline.NewPrefixCompleter(
-	readline.PcItem("cd",
-		readline.PcItemDynamic(listDirectories),
-	),
-	readline.PcItem("echo"),
-	readline.PcItem("exit"),
-	readline.PcItem("type"),
-	// Add external commands dynamically below if desired
-)
 
 func init() {
 	COMMANDS = map[string]func([]string, *Output){
@@ -225,10 +274,10 @@ func init() {
 func main() {
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          "$ ",
-		HistoryFile:     "/tmp/readline.tmp", // optional
+		HistoryFile:     "/tmp/readline.tmp",
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
-		AutoComplete:    completer, // ← we'll define this
+		AutoComplete:    &AutoCompleter{},
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -236,7 +285,7 @@ func main() {
 	defer rl.Close()
 	for {
 		line, err := rl.Readline()
-		if err != nil { // io.EOF or readline.ErrInterrupt
+		if err != nil {
 			break
 		}
 		if strings.TrimSpace(line) == "" {
