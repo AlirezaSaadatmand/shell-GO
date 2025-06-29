@@ -47,10 +47,8 @@ func separateCommandArgs(input string) (string, []string) {
 			}
 			i++
 		case '\\':
-			if i+1 >= len(input) {
-				current.WriteByte('\\')
-				i++
-			}
+			current.WriteByte('\\')
+			i++
 			// next := input[i+1]
 			// if inSingleQuote {
 			// 	current.WriteByte('\\')
