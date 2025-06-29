@@ -284,7 +284,7 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	// One match → complete it
 	if len(matches) == 1 {
 		match := matches[0]
-		suffix := match[len(current):]
+		suffix := match[len(current):] + " "
 		a.tabCount = 0
 		return [][]rune{[]rune(suffix)}, pos
 	}
