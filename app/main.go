@@ -428,6 +428,21 @@ func loadHistoryFromFile(path string) {
 	historyAppendIndex = len(shellHistory)
 }
 
+func writeHistoryToFile() {
+	if histFile == "" {
+		return
+	}
+	file, err := os.Create(histFile)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	for _, entry := range shellHistory {
+		fmt.Fprintln(file, entry)
+	}
+}
+
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
 var paths = strings.Split(os.Getenv("PATH"), ":")
@@ -503,15 +518,6 @@ func main() {
 			}
 		}
 	}
-	if histFile != "" {
-		file, err := os.Create(histFile)
-		if err == nil {
-			for _, entry := range shellHistory {
-				fmt.Fprintln(file, entry)
-			}
-			file.Close()
-		}
-	}
 }
 
 func exit(args []string, out *Output) {
@@ -528,6 +534,7 @@ func exit(args []string, out *Output) {
 			return
 		}
 	}
+	writeHistoryToFile()
 	os.Exit(status)
 }
 
