@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 	"unicode"
-
+	
 	"github.com/chzyer/readline"
 )
 
@@ -182,33 +182,6 @@ func separateCommandArgs(input string) (string, []string) {
 	return args[0], args[1:]
 }
 
-func completeCommands(prefix string) [][]rune {
-	var result [][]rune
-	seen := make(map[string]bool)
-
-	for _, b := range builtin {
-		if strings.HasPrefix(b, prefix) && !seen[b] {
-			seen[b] = true
-			result = append(result, []rune(b))
-		}
-	}
-
-	for _, dir := range paths {
-		files, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, f := range files {
-			name := f.Name()
-			if strings.HasPrefix(name, prefix) && !seen[name] {
-				seen[name] = true
-				result = append(result, []rune(name))
-			}
-		}
-	}
-	return result
-}
-
 func findCommandMatches(prefix string) []string {
 	var matches []string
 	seen := make(map[string]bool)
@@ -337,7 +310,6 @@ func runBuiltin(cmd string, args []string, out *Output, in *os.File) {
 	}
 }
 
-
 func executePipeline(line string) bool {
 	parts := strings.Split(line, "|")
 	commands := make([][]string, 0, len(parts))
@@ -441,14 +413,16 @@ func executePipeline(line string) bool {
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
 var paths = strings.Split(os.Getenv("PATH"), ":")
+var rlGlobal *readline.Instance
 
 func init() {
 	COMMANDS = map[string]func([]string, *Output){
-		"exit": exit,
-		"echo": echo,
-		"type": type_,
-		"pwd":  pwd,
-		"cd":   cd,
+		"exit":    exit,
+		"echo":    echo,
+		"type":    type_,
+		"pwd":     pwd,
+		"cd":      cd,
+		"history": history,
 	}
 	builtin = []string{
 		"exit",
@@ -456,6 +430,7 @@ func init() {
 		"type",
 		"pwd",
 		"cd",
+		"history",
 	}
 }
 func main() {
@@ -470,6 +445,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer rl.Close()
+	rlGlobal = rl
 	for {
 		line, err := rl.Readline()
 		if err != nil {
@@ -602,6 +578,24 @@ func cd(args []string, out *Output) {
 	}
 
 	lastDir = currentDir
+}
+
+func history(args []string, out *Output) {
+	historyPath := "/tmp/readline.tmp"
+
+	data, err := os.ReadFile(historyPath)
+	if err != nil {
+		fmt.Fprintln(out.Stderr, "history: could not read history file:", err)
+		return
+	}
+
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		fmt.Fprintf(out.Stdout, "%d  %s\n", i+1, line)
+	}
 }
 
 func execute(command string, args []string, out *Output) bool {
