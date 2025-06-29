@@ -241,7 +241,7 @@ func execute(command string, args []string, output string) bool {
 	}
 
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
+		fmt.Fprintln(os.Stdout, "Error:", err)
 	}
 
 	return true
