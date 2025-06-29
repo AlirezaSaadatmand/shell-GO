@@ -316,7 +316,9 @@ func cd(args []string, out *Output) {
 	}
 
 	if err := os.Chdir(targetDir); err != nil {
-		fmt.Fprintln(out.Stderr, "cd:", err.(*os.PathError).Err)
+		msg := err.Error()
+		msg = strings.ToUpper(msg[:1]) + msg[1:]
+		fmt.Fprintf(out.Stderr, "cd: %s: %s\n", targetDir, msg)
 		return
 	}
 
