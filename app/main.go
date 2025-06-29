@@ -1,14 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/chzyer/readline"
 )
 
 type Redirection struct {
@@ -174,43 +176,73 @@ func separateCommandArgs(input string) (string, []string) {
 	if len(args) == 0 {
 		return "", []string{}
 	}
-	
+
 	return args[0], args[1:]
+}
+func listDirectories(string) []string {
+	files, err := os.ReadDir(".")
+	if err != nil {
+		return nil
+	}
+	var dirs []string
+	for _, file := range files {
+		if file.IsDir() {
+			dirs = append(dirs, file.Name())
+		}
+	}
+	return dirs
 }
 
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
 var paths = strings.Split(os.Getenv("PATH"), ":")
+var completer = readline.NewPrefixCompleter(
+	readline.PcItem("cd",
+		readline.PcItemDynamic(listDirectories),
+	),
+	readline.PcItem("echo"),
+	readline.PcItem("exit"),
+	readline.PcItem("type"),
+	// Add external commands dynamically below if desired
+)
 
 func init() {
 	COMMANDS = map[string]func([]string, *Output){
 		"exit": exit,
 		"echo": echo,
 		"type": type_,
-		"pwd": pwd,
-		"cd": cd,
+		"pwd":  pwd,
+		"cd":   cd,
 	}
 	builtin = []string{
 		"exit",
 		"echo",
 		"type",
 		"pwd",
-		"cd",	
+		"cd",
 	}
 }
 func main() {
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          "$ ",
+		HistoryFile:     "/tmp/readline.tmp", // optional
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+		AutoComplete:    completer, // ← we'll define this
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rl.Close()
 	for {
-		fmt.Fprint(os.Stdout, "$ ")
-
-		input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "Error reading input:", err)
-			os.Exit(1)
-		}	 
-		if strings.TrimSpace(input) == "" {
+		line, err := rl.Readline()
+		if err != nil { // io.EOF or readline.ErrInterrupt
+			break
+		}
+		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		command, args := separateCommandArgs(strings.TrimSpace(input))
+		command, args := separateCommandArgs(strings.TrimSpace(line))
 		args, stdoutRedir, stderrRedir := parseRedirections(args)
 
 		out, err := setupOutput(stdoutRedir, stderrRedir)
@@ -230,17 +262,20 @@ func main() {
 }
 
 func exit(args []string, out *Output) {
-	if len(args) != 1 {
-		fmt.Println("Error: expected exactly one argument")
-		return
-	}
-
-	status, err := strconv.Atoi(args[0])
-	if err != nil {
-		fmt.Println("Invalid number:", err)
-		return
-	}
-	os.Exit(status)
+    status := 0
+    if len(args) > 1 {
+        fmt.Fprintln(out.Stderr, "Error: expected zero or one argument")
+        return
+    }
+    if len(args) == 1 {
+        var err error
+        status, err = strconv.Atoi(args[0])
+        if err != nil {
+            fmt.Fprintln(out.Stderr, "Invalid number:", err)
+            return
+        }
+    }
+    os.Exit(status)
 }
 
 func echo(args []string, out *Output) {
@@ -323,7 +358,6 @@ func cd(args []string, out *Output) {
 		}
 		return
 	}
-
 
 	lastDir = currentDir
 }
