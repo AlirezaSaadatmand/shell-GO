@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -180,26 +179,6 @@ func separateCommandArgs(input string) (string, []string) {
 
 	return args[0], args[1:]
 }
-func isBuiltin(cmd string) bool {
-	if exists := slices.Contains(builtin, cmd); exists {
-		return true
-	} else {
-		return false
-	}
-}
-func listDirectories(string) []string {
-	files, err := os.ReadDir(".")
-	if err != nil {
-		return nil
-	}
-	var dirs []string
-	for _, file := range files {
-		if file.IsDir() {
-			dirs = append(dirs, file.Name())
-		}
-	}
-	return dirs
-}
 
 func completeCommands(prefix string) [][]rune {
 	var result [][]rune
@@ -228,15 +207,6 @@ func completeCommands(prefix string) [][]rune {
 	return result
 }
 
-
-func isExecutable(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return !info.IsDir() && info.Mode().Perm()&0111 != 0
-}
-
 func completeDirs(prefix string) [][]rune {
 	files, _ := os.ReadDir(".")
 	var result [][]rune
@@ -248,7 +218,39 @@ func completeDirs(prefix string) [][]rune {
 	}
 	return result
 }
-type AutoCompleter struct{}
+
+func findCommandMatches(prefix string) []string {
+	var matches []string
+	seen := make(map[string]bool)
+
+	for _, b := range builtin {
+		if strings.HasPrefix(b, prefix) && !seen[b] {
+			seen[b] = true
+			matches = append(matches, b)
+		}
+	}
+
+	for _, dir := range paths {
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			name := f.Name()
+			if strings.HasPrefix(name, prefix) && !seen[name] {
+				seen[name] = true
+				matches = append(matches, name)
+			}
+		}
+	}
+
+	return matches
+}
+
+type AutoCompleter struct {
+	lastPrefix string
+	tabCount   int
+}
 
 func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	start := pos
@@ -257,29 +259,50 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	}
 	current := string(line[start:pos])
 
-	// At the beginning: command completion
+	// === COMMAND COMPLETION ===
 	if start == 0 {
-		suggestions := completeCommands(current)
-		
-		if len(suggestions) == 0 {
-			// Ring the bell for invalid command
+		matches := findCommandMatches(current)
+
+		if len(matches) == 0 {
 			fmt.Fprint(os.Stderr, "\a")
+			a.lastPrefix = ""
+			a.tabCount = 0
 			return nil, pos
 		}
-		// IMPORTANT: transform full suggestions into suffixes
-		// to avoid duplication when readline inserts at `start`
-		for i := range suggestions {
 
-			full := string(suggestions[i])
-			if strings.HasPrefix(full, current) {
-				suggestions[i] = []rune(full[len(current):] + " ")
-			}
+		// One match → complete immediately
+		if len(matches) == 1 {
+			a.lastPrefix = ""
+			a.tabCount = 0
+			return [][]rune{[]rune(matches[0][len(current):] + " ")}, pos
 		}
 
-		return suggestions, pos // <-- insert *after* cursor
+		// Multiple matches
+		if current == a.lastPrefix {
+			a.tabCount++
+		} else {
+			a.tabCount = 1
+			a.lastPrefix = current
+		}
+
+		if a.tabCount == 1 {
+			// First tab on multi-match → bell
+			fmt.Fprint(os.Stderr, "\a")
+			return nil, pos
+		} else {
+			// Second tab → show all matches and reprint prompt
+			fmt.Println()
+			for _, match := range matches {
+				fmt.Print(match + "  ")
+			}
+			fmt.Println()
+			fmt.Print("$ " + current)
+			a.tabCount = 0 // reset after printing
+			return nil, pos
+		}
 	}
 
-	// Not a command: file/directory suggestions
+	// === ARG COMPLETION (directories) ===
 	suggestions := completeDirs(current)
 	for i := range suggestions {
 		full := string(suggestions[i])
@@ -287,9 +310,13 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 			suggestions[i] = []rune(full[len(current):])
 		}
 	}
-	return suggestions, pos // same reason: insert after
-}
 
+	// Reset state for non-command tabbing
+	a.lastPrefix = ""
+	a.tabCount = 0
+
+	return suggestions, pos
+}
 
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
