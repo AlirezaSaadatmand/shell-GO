@@ -260,10 +260,16 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	// At the beginning: command completion
 	if start == 0 {
 		suggestions := completeCommands(current)
-
+		
+		if len(suggestions) == 0 {
+			// Ring the bell for invalid command
+			fmt.Fprint(os.Stderr, "\a")
+			return nil, pos
+		}
 		// IMPORTANT: transform full suggestions into suffixes
 		// to avoid duplication when readline inserts at `start`
 		for i := range suggestions {
+
 			full := string(suggestions[i])
 			if strings.HasPrefix(full, current) {
 				suggestions[i] = []rune(full[len(current):])
