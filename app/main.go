@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -244,6 +245,7 @@ func findCommandMatches(prefix string) []string {
 		}
 	}
 
+	sort.Strings(matches)
 	return matches
 }
 
