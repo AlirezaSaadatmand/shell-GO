@@ -50,7 +50,6 @@ func separateCommandArgs(input string) (string, []string) {
 			if i+1 >= len(input) {
 				current.WriteByte('\\')
 				i++
-				break
 			}
 			// next := input[i+1]
 			// if inSingleQuote {
