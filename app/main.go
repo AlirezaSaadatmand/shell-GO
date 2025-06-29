@@ -584,8 +584,25 @@ func cd(args []string, out *Output) {
 }
 
 func history(args []string, out *Output) {
-	total := len(shellHistory)
+	if len(args) == 2 && args[0] == "-r" {
+		path := args[1]
+		data, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintln(out.Stderr, "history: cannot read file:", err)
+			return
+		}
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			shellHistory = append(shellHistory, line)
+		}
+		return
+	}
 
+	// handle `history` and `history <n>`
+	total := len(shellHistory)
 	count := total
 	if len(args) == 1 {
 		n, err := strconv.Atoi(args[0])
@@ -603,6 +620,7 @@ func history(args []string, out *Output) {
 		fmt.Fprintf(out.Stdout, "%5d  %s\n", i+1, shellHistory[i])
 	}
 }
+
 func execute(command string, args []string, out *Output) bool {
 	fullPath := findExecutable(command, paths)
 	if fullPath == "" {
