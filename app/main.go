@@ -168,7 +168,7 @@ func echo(args []string, output string) {
 		return
 	}
 	if output == "" {
-		fmt.Fprintln(os.Stdout, strings.Join(args, " "))
+		fmt.Fprint(os.Stdout, strings.Join(args, " "))
 	} else {
 		file, err := os.Create(output)
 		if err != nil {
@@ -176,7 +176,7 @@ func echo(args []string, output string) {
         	return
     	}
 	    defer file.Close()
-		file.WriteString(strings.Join(args, " "))
+		file.WriteString(strings.Join(args, " ") + "\n")
 	}
 }
 
@@ -206,7 +206,7 @@ func type_(args []string, output string) {
         	return
     	}
 	    defer file.Close()
-		file.WriteString(outputText)
+		file.WriteString(outputText + "\n")
 	}
 }
 
