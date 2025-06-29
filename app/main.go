@@ -52,18 +52,17 @@ func separateCommandArgs(input string) (string, []string) {
 				i++
 				break
 			}
-			next := input[i+1]
-			if inSingleQuote {
-				current.WriteByte('\\')
-				i++
-			} else if inDoubleQuote {
-				// Only escape ", \, $, `
-				current.WriteByte(next)
-				i += 2
-			} else {
-				current.WriteByte(next)
-				i += 2
-			}
+			// next := input[i+1]
+			// if inSingleQuote {
+			// 	current.WriteByte('\\')
+			// 	i++
+			// } else if inDoubleQuote {
+			// 	current.WriteByte(next)
+			// 	i += 2
+			// } else {
+			// 	current.WriteByte(next)
+			// 	i += 2
+			// }
 		case ' ', '\t':
 			if inSingleQuote || inDoubleQuote {
 				current.WriteByte(ch)
