@@ -208,18 +208,6 @@ func completeCommands(prefix string) [][]rune {
 	return result
 }
 
-func completeDirs(prefix string) [][]rune {
-	files, _ := os.ReadDir(".")
-	var result [][]rune
-	for _, f := range files {
-		if f.IsDir() && strings.HasPrefix(f.Name(), prefix) {
-			suffix := f.Name()[len(prefix):]
-			result = append(result, []rune(suffix))
-		}
-	}
-	return result
-}
-
 func findCommandMatches(prefix string) []string {
 	var matches []string
 	seen := make(map[string]bool)
@@ -249,9 +237,27 @@ func findCommandMatches(prefix string) []string {
 	return matches
 }
 
+
+func longestCommonPrefix(strs []string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	prefix := strs[0]
+	for _, s := range strs[1:] {
+		for !strings.HasPrefix(s, prefix) {
+			prefix = prefix[:len(prefix)-1]
+			if prefix == "" {
+				return ""
+			}
+		}
+	}
+	return prefix
+}
+
 type AutoCompleter struct {
-	lastPrefix string
-	tabCount   int
+	lastLine  string
+	lastPos   int
+	tabCount  int
 }
 
 func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
@@ -261,64 +267,55 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	}
 	current := string(line[start:pos])
 
-	// === COMMAND COMPLETION ===
-	if start == 0 {
-		matches := findCommandMatches(current)
+	// Reset tab count if line or position changed
+	if current != a.lastLine || pos != a.lastPos {
+		a.lastLine = current
+		a.lastPos = pos
+		a.tabCount = 0
+	}
 
-		if len(matches) == 0 {
-			fmt.Fprint(os.Stderr, "\a")
-			a.lastPrefix = ""
-			a.tabCount = 0
-			return nil, pos
-		}
+	matches := findCommandMatches(current)
+	if len(matches) == 0 {
+		fmt.Fprint(os.Stderr, "\a")
+		a.tabCount = 0
+		return nil, pos
+	}
 
-		// One match → complete immediately
-		if len(matches) == 1 {
-			a.lastPrefix = ""
-			a.tabCount = 0
-			return [][]rune{[]rune(matches[0][len(current):] + " ")}, pos
-		}
+	// One match → complete it
+	if len(matches) == 1 {
+		match := matches[0]
+		suffix := match[len(current):]
+		a.tabCount = 0
+		return [][]rune{[]rune(suffix)}, pos
+	}
 
-		// Multiple matches
-		if current == a.lastPrefix {
-			a.tabCount++
-		} else {
-			a.tabCount = 1
-			a.lastPrefix = current
-		}
-
+	// Multiple matches → try longest common prefix
+	lcp := longestCommonPrefix(matches)
+	if lcp == current {
+		// Nothing more to complete
+		a.tabCount++
 		if a.tabCount == 1 {
-			// First tab on multi-match → bell
 			fmt.Fprint(os.Stderr, "\a")
-			return nil, pos
 		} else {
-			// Second tab → show all matches and reprint prompt
+			// Second tab → print all
 			fmt.Println()
-			for _, match := range matches {
-				fmt.Print(match + "  ")
+			for _, m := range matches {
+				fmt.Print(m + "  ")
 			}
 			fmt.Println()
 			fmt.Print("$ " + current)
-			a.tabCount = 0 // reset after printing
-			return nil, pos
+			a.tabCount = 0
 		}
+		return nil, pos
 	}
 
-	// === ARG COMPLETION (directories) ===
-	suggestions := completeDirs(current)
-	for i := range suggestions {
-		full := string(suggestions[i])
-		if strings.HasPrefix(full, current) {
-			suggestions[i] = []rune(full[len(current):])
-		}
-	}
-
-	// Reset state for non-command tabbing
-	a.lastPrefix = ""
+	// Autocomplete to the LCP suffix
+	suffix := lcp[len(current):]
+	a.lastLine = lcp
 	a.tabCount = 0
-
-	return suggestions, pos
+	return [][]rune{[]rune(suffix)}, pos
 }
+
 
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
