@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/chzyer/readline"
@@ -237,7 +238,6 @@ func findCommandMatches(prefix string) []string {
 	return matches
 }
 
-
 func longestCommonPrefix(strs []string) string {
 	if len(strs) == 0 {
 		return ""
@@ -255,9 +255,9 @@ func longestCommonPrefix(strs []string) string {
 }
 
 type AutoCompleter struct {
-	lastLine  string
-	lastPos   int
-	tabCount  int
+	lastLine string
+	lastPos  int
+	tabCount int
 }
 
 func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
@@ -310,11 +310,38 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	return [][]rune{[]rune(suffix)}, pos
 }
 
+func runBuiltin(cmd string, args []string, out *Output, in *os.File) {
+	// Temporarily override stdin/stdout/stderr
+	oldStdin := os.Stdin
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+
+	if in != nil {
+		os.Stdin = in
+	}
+	if out.Stdout != nil {
+		os.Stdout = out.Stdout
+	}
+	if out.Stderr != nil {
+		os.Stderr = out.Stderr
+	}
+
+	defer func() {
+		os.Stdin = oldStdin
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+
+	if builtinFunc, ok := COMMANDS[cmd]; ok {
+		builtinFunc(args, out)
+	}
+}
+
+
 func executePipeline(line string) bool {
 	parts := strings.Split(line, "|")
 	commands := make([][]string, 0, len(parts))
 
-	// parse each part into command and args + redirections
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
@@ -323,15 +350,12 @@ func executePipeline(line string) bool {
 		cmd, args := separateCommandArgs(part)
 		args, _, _ = parseRedirections(args)
 		commands = append(commands, append([]string{cmd}, args...))
-		// you can handle redirections later or inside execute function
 	}
 
-	// Prepare pipes
-	// We'll create n-1 pipes for n commands
-	cmds := make([]*exec.Cmd, len(commands))
+	numCmds := len(commands)
 	var pipes []struct{ r, w *os.File }
 
-	for i := 0; i < len(commands)-1; i++ {
+	for i := 0; i < numCmds-1; i++ {
 		r, w, err := os.Pipe()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "pipe error:", err)
@@ -340,62 +364,79 @@ func executePipeline(line string) bool {
 		pipes = append(pipes, struct{ r, w *os.File }{r, w})
 	}
 
-	// Setup each command's stdin/stdout
+	var processes []*exec.Cmd
+	var wg sync.WaitGroup
+
 	for i, cmdArgs := range commands {
 		cmdName := cmdArgs[0]
-		cmdArgsSlice := cmdArgs[1:]
+		args := cmdArgs[1:]
 
-		fullPath := findExecutable(cmdName, paths)
-		if fullPath == "" {
-			fmt.Fprintln(os.Stderr, cmdName+": command not found")
-			return false
-		}
+		var stdin *os.File = os.Stdin
+		var stdout *os.File = os.Stdout
 
-		cmd := exec.Command(fullPath, cmdArgsSlice...)
-
-		// stdin
-		if i == 0 {
-			cmd.Stdin = os.Stdin
-		} else {
-			cmd.Stdin = pipes[i-1].r
-		}
-
-		// stdout
-		if i == len(commands)-1 {
-			cmd.Stdout = os.Stdout
-		} else {
-			cmd.Stdout = pipes[i].w
-		}
-
-		// stderr always to os.Stderr for simplicity, you can handle redirection if you want
-		cmd.Stderr = os.Stderr
-
-		cmds[i] = cmd
-	}
-
-	// Start all commands
-	for i, cmd := range cmds {
-		if err := cmd.Start(); err != nil {
-			fmt.Fprintln(os.Stderr, "failed to start command:", err)
-			return false
-		}
-		// Close pipe ends in parent as needed
 		if i > 0 {
-			pipes[i-1].r.Close()
+			stdin = pipes[i-1].r
 		}
-		if i < len(cmds)-1 {
-			pipes[i].w.Close()
+		if i < numCmds-1 {
+			stdout = pipes[i].w
+		}
+
+		if _, isBuiltin := COMMANDS[cmdName]; isBuiltin {
+			// Built-in: run in goroutine
+			r := stdin
+			w := stdout
+
+			wg.Add(1)
+			go func(name string, args []string, in, out *os.File) {
+				defer wg.Done()
+				runBuiltin(name, args, &Output{
+					Stdout: out,
+					Stderr: os.Stderr,
+				}, in)
+				if in != os.Stdin {
+					in.Close()
+				}
+				if out != os.Stdout {
+					out.Close()
+				}
+			}(cmdName, args, r, w)
+
+		} else {
+			fullPath := findExecutable(cmdName, paths)
+			if fullPath == "" {
+				fmt.Fprintln(os.Stderr, cmdName+": command not found")
+				return false
+			}
+
+			cmd := exec.Command(fullPath, args...)
+			cmd.Stdin = stdin
+			cmd.Stdout = stdout
+			cmd.Stderr = os.Stderr
+
+			if err := cmd.Start(); err != nil {
+				fmt.Fprintln(os.Stderr, "start error:", err)
+				return false
+			}
+			processes = append(processes, cmd)
 		}
 	}
 
-	// Wait all commands
-	for _, cmd := range cmds {
+	// Close all pipe ends in the parent process
+	for _, pipe := range pipes {
+		pipe.r.Close()
+		pipe.w.Close()
+	}
+
+	// Wait for external commands
+	for _, cmd := range processes {
 		cmd.Wait()
 	}
 
+	// Wait for builtin goroutines
+	wg.Wait()
+
 	return true
 }
-
 
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
