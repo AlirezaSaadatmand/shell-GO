@@ -240,9 +240,8 @@ func execute(command string, args []string, output string) bool {
 		cmd.Stdout = outFile
 	}
 
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintln(os.Stdout, "Error:", err)
-	}
+	cmd.Run()
+
 
 	return true
 }
