@@ -414,6 +414,7 @@ var COMMANDS map[string]func([]string, *Output)
 var builtin []string
 var paths = strings.Split(os.Getenv("PATH"), ":")
 var rlGlobal *readline.Instance
+var shellHistory []string
 
 func init() {
 	COMMANDS = map[string]func([]string, *Output){
@@ -451,9 +452,11 @@ func main() {
 		if err != nil {
 			break
 		}
-		if strings.TrimSpace(line) == "" {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
 			continue
 		}
+		shellHistory = append(shellHistory, trimmed)
 		if strings.Contains(line, "|") {
 			ok := executePipeline(line)
 			if !ok {
@@ -581,17 +584,8 @@ func cd(args []string, out *Output) {
 }
 
 func history(args []string, out *Output) {
-	historyPath := "/tmp/readline.tmp"
-	data, err := os.ReadFile(historyPath)
-	if err != nil {
-		fmt.Fprintln(out.Stderr, "history: could not read history file:", err)
-		return
-	}
+	total := len(shellHistory)
 
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	total := len(lines)
-
-	// Parse argument (if provided)
 	count := total
 	if len(args) == 1 {
 		n, err := strconv.Atoi(args[0])
@@ -599,20 +593,16 @@ func history(args []string, out *Output) {
 			fmt.Fprintln(out.Stderr, "history: invalid number:", args[0])
 			return
 		}
-		if n < total {
+		if n < count {
 			count = n
 		}
 	}
 
 	start := total - count
 	for i := start; i < total; i++ {
-		if strings.TrimSpace(lines[i]) == "" {
-			continue
-		}
-		fmt.Fprintf(out.Stdout, "%5d  %s\n", i+1, lines[i])
+		fmt.Fprintf(out.Stdout, "%5d  %s\n", i+1, shellHistory[i])
 	}
 }
-
 func execute(command string, args []string, out *Output) bool {
 	fullPath := findExecutable(command, paths)
 	if fullPath == "" {
