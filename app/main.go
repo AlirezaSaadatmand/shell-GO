@@ -413,8 +413,8 @@ func executePipeline(line string) bool {
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
 var paths = strings.Split(os.Getenv("PATH"), ":")
-var rlGlobal *readline.Instance
 var shellHistory []string
+var historyAppendIndex int
 
 func init() {
 	COMMANDS = map[string]func([]string, *Output){
@@ -446,17 +446,18 @@ func main() {
 		log.Fatal(err)
 	}
 	defer rl.Close()
-	rlGlobal = rl
 	for {
 		line, err := rl.Readline()
 		if err != nil {
 			break
 		}
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
+
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
-		shellHistory = append(shellHistory, trimmed)
+
+		shellHistory = append(shellHistory, line)
 		if strings.Contains(line, "|") {
 			ok := executePipeline(line)
 			if !ok {
@@ -584,6 +585,23 @@ func cd(args []string, out *Output) {
 }
 
 func history(args []string, out *Output) {
+    if len(args) == 2 && args[0] == "-a" {
+        path := args[1]
+        file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+        if err != nil {
+            fmt.Fprintln(out.Stderr, "history: cannot append to file:", err)
+            return
+        }
+        defer file.Close()
+
+        for _, entry := range shellHistory[historyAppendIndex:] {
+            fmt.Fprintln(file, entry)
+        }
+
+        historyAppendIndex = len(shellHistory)
+        return
+	}
+
 	if len(args) == 2 && args[0] == "-r" {
 		// Read history from file
 		path := args[1]
