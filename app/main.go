@@ -582,19 +582,34 @@ func cd(args []string, out *Output) {
 
 func history(args []string, out *Output) {
 	historyPath := "/tmp/readline.tmp"
-
 	data, err := os.ReadFile(historyPath)
 	if err != nil {
 		fmt.Fprintln(out.Stderr, "history: could not read history file:", err)
 		return
 	}
 
-	lines := strings.Split(string(data), "\n")
-	for i, line := range lines {
-		if strings.TrimSpace(line) == "" {
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	total := len(lines)
+
+	// Parse argument (if provided)
+	count := total
+	if len(args) == 1 {
+		n, err := strconv.Atoi(args[0])
+		if err != nil || n < 0 {
+			fmt.Fprintln(out.Stderr, "history: invalid number:", args[0])
+			return
+		}
+		if n < total {
+			count = n
+		}
+	}
+
+	start := total - count
+	for i := start; i < total; i++ {
+		if strings.TrimSpace(lines[i]) == "" {
 			continue
 		}
-		fmt.Fprintf(out.Stdout, "%d  %s\n", i+1, line)
+		fmt.Fprintf(out.Stdout, "%5d  %s\n", i+1, lines[i])
 	}
 }
 
