@@ -188,7 +188,7 @@ func init() {
 		"echo": echo,
 		"type": type_,
 		"pwd": pwd,
-		"cd": cd
+		"cd": cd,
 	}
 	builtin = []string{
 		"exit",
