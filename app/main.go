@@ -131,8 +131,10 @@ func main() {
 			COMMANDS[command](args)
 		} else {
 			fullPath := command
-
+			fmt.Fprintf(os.Stderr, "DEBUG: checking command: [%s]\n", command)
+			
 			if info, err := os.Stat(command); err == nil && info.Mode().IsRegular(){
+				fmt.Fprintf(os.Stderr, "DEBUG: file exists: %v\n", info.Name())
 				fullPath = command
 			} else {
 				fullPath = findExecutable(command, paths)
