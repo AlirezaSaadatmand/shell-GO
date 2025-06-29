@@ -316,11 +316,14 @@ func cd(args []string, out *Output) {
 	}
 
 	if err := os.Chdir(targetDir); err != nil {
-		msg := err.Error()
-		msg = strings.ToUpper(msg[:1]) + msg[1:]
-		fmt.Fprintf(out.Stderr, "cd: %s: %s\n", targetDir, msg)
+		if os.IsNotExist(err) {
+			fmt.Fprintf(out.Stderr, "cd: %s: No such file or directory\n", targetDir)
+		} else {
+			fmt.Fprintf(out.Stderr, "cd: %s: %s\n", targetDir, err.Error())
+		}
 		return
 	}
+
 
 	lastDir = currentDir
 }
