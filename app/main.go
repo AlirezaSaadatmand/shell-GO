@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -194,51 +193,59 @@ func listDirectories(string) []string {
 	return dirs
 }
 
-func isBuiltin(cmd string) bool {
-	if exists := slices.Contains(builtin, cmd); exists {
-		return true
-	} else {
-		return false
-	}
+func completeCommands(prefix string) [][]rune {
+    var result [][]rune
+
+    // Add builtins that match the prefix
+    for _, b := range builtin {
+        if strings.HasPrefix(b, prefix) {
+            // Return the full command, not just the suffix
+            result = append(result, []rune(b))
+        }
+    }
+
+    // Add executables from PATH
+    seen := make(map[string]bool)
+    for _, dir := range paths {
+        files, err := os.ReadDir(dir)
+        if err != nil {
+            continue
+        }
+        for _, f := range files {
+            name := f.Name()
+            if strings.HasPrefix(name, prefix) && !seen[name] && isExecutable(filepath.Join(dir, name)) {
+                seen[name] = true
+                result = append(result, []rune(name))
+            }
+        }
+    }
+    return result
 }
 
-func completeCommands(prefix string) [][]rune {
-	var result [][]rune
-
-	// Built-in commands
-	for _, b := range builtin {
-		if strings.HasPrefix(b, prefix) {
-			result = append(result, []rune(b))
-		}
+func isExecutable(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
 	}
-	if prefix == "" {
-		return result
-	}
-
-	// External commands from $PATH
-	seen := make(map[string]bool)
-	for _, dir := range paths {
-		files, err := os.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		for _, f := range files {
-			name := f.Name()
-			if strings.HasPrefix(name, prefix) && !seen[name] {
-				seen[name] = true
-				result = append(result, []rune(name))
-			}
-		}
-	}
-	return result
+	return !info.IsDir() && info.Mode().Perm()&0111 != 0
 }
 
 func completeDirs(prefix string) [][]rune {
-	files, _ := os.ReadDir(".")
+	dir, file := filepath.Split(prefix)
+	if dir == "" {
+		dir = "."
+	}
+
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
 	var result [][]rune
 	for _, f := range files {
-		if f.IsDir() && strings.HasPrefix(f.Name(), prefix) {
-			result = append(result, []rune(f.Name()))
+		if f.IsDir() && strings.HasPrefix(f.Name(), file) {
+			fullPath := filepath.Join(dir, f.Name())
+			result = append(result, []rune(fullPath))
 		}
 	}
 	return result
@@ -247,35 +254,51 @@ func completeDirs(prefix string) [][]rune {
 type AutoCompleter struct{}
 
 func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
-	input := string(line[:pos])
+    // Find the start of the current word
+    start := pos
+    for start > 0 && !unicode.IsSpace(line[start-1]) {
+        start--
+    }
+    current := string(line[start:pos])
 
-	// Find the current word start
-	start := pos
-	for start > 0 && !unicode.IsSpace(line[start-1]) {
-		start--
-	}
-	current := string(line[start:pos])
+    // Split the line into words to determine context
+    words := strings.Fields(string(line[:pos]))
+    
+    // If we're completing the first word (command)
+    if len(words) == 0 || (len(words) == 1 && pos >= len(words[0])) {
+        completions := completeCommands(current)
+        if len(completions) > 0 {
+            // For single completion, replace the current word
+            if len(completions) == 1 {
+                // Only add space if we're at the end of the line
+                if pos == len(line) {
+                    completions[0] = append(completions[0], ' ')
+                }
+                return completions, start
+            }
+            // For multiple completions, show options without space
+            return completions, start
+        }
+        return nil, start
+    }
 
-	tokens := strings.Fields(input)
+    // Otherwise, we're completing arguments (directories/files)
+    completions := completeDirs(current)
+    if len(completions) > 0 {
+        // For single completion, replace the current word
+        if len(completions) == 1 {
+            // Only add space if we're at the end of the line
+            if pos == len(line) {
+                completions[0] = append(completions[0], ' ')
+            }
+            return completions, start
+        }
+        // For multiple completions, show options without space
+        return completions, start
+    }
 
-	if len(tokens) == 0 || (len(tokens) == 1 && start == pos) {
-		// No tokens yet, or empty word after whitespace → suggest all commands
-		return completeCommands(""), 0
-	}
-
-	if start == 0 {
-		// First word (command)
-		if !isBuiltin(current) && findExecutable(current, paths) == "" {
-			fmt.Print("\a") // Bell
-			return nil, start
-		}
-		return completeCommands(current), start
-	}
-
-	// Argument position → complete directories
-	return completeDirs(current), start
+    return nil, start
 }
-
 
 var COMMANDS map[string]func([]string, *Output)
 var builtin []string
@@ -337,20 +360,20 @@ func main() {
 }
 
 func exit(args []string, out *Output) {
-    status := 0
-    if len(args) > 1 {
-        fmt.Fprintln(out.Stderr, "Error: expected zero or one argument")
-        return
-    }
-    if len(args) == 1 {
-        var err error
-        status, err = strconv.Atoi(args[0])
-        if err != nil {
-            fmt.Fprintln(out.Stderr, "Invalid number:", err)
-            return
-        }
-    }
-    os.Exit(status)
+	status := 0
+	if len(args) > 1 {
+		fmt.Fprintln(out.Stderr, "Error: expected zero or one argument")
+		return
+	}
+	if len(args) == 1 {
+		var err error
+		status, err = strconv.Atoi(args[0])
+		if err != nil {
+			fmt.Fprintln(out.Stderr, "Invalid number:", err)
+			return
+		}
+	}
+	os.Exit(status)
 }
 
 func echo(args []string, out *Output) {
