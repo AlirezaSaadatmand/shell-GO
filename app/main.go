@@ -281,9 +281,7 @@ func execute(command string, args []string, out *Output) bool {
 		Stderr: out.Stderr,
 	}
 
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-	}
+	cmd.Run()
 
 	if out.Stdout != os.Stdout {
 		out.Stdout.Close()
