@@ -272,7 +272,7 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 
 			full := string(suggestions[i])
 			if strings.HasPrefix(full, current) {
-				suggestions[i] = []rune(full[len(current):])
+				suggestions[i] = []rune(full[len(current):] + " ")
 			}
 		}
 
