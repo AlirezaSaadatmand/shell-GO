@@ -202,11 +202,32 @@ func isBuiltin(cmd string) bool {
 	}
 }
 
-func completeBuiltins(prefix string) [][]rune {
+func completeCommands(prefix string) [][]rune {
 	var result [][]rune
+
+	// Built-in commands
 	for _, b := range builtin {
 		if strings.HasPrefix(b, prefix) {
 			result = append(result, []rune(b))
+		}
+	}
+	if prefix == "" {
+		return result
+	}
+
+	// External commands from $PATH
+	seen := make(map[string]bool)
+	for _, dir := range paths {
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			name := f.Name()
+			if strings.HasPrefix(name, prefix) && !seen[name] {
+				seen[name] = true
+				result = append(result, []rune(name))
+			}
 		}
 	}
 	return result
@@ -227,27 +248,32 @@ type AutoCompleter struct{}
 
 func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	input := string(line[:pos])
+
+	// Find the current word start
+	start := pos
+	for start > 0 && !unicode.IsSpace(line[start-1]) {
+		start--
+	}
+	current := string(line[start:pos])
+
 	tokens := strings.Fields(input)
 
-	if len(tokens) == 0 {
-		// No input yet → suggest all builtins
-		return completeBuiltins(""), 0
+	if len(tokens) == 0 || (len(tokens) == 1 && start == pos) {
+		// No tokens yet, or empty word after whitespace → suggest all commands
+		return completeCommands(""), 0
 	}
 
-	// Command position
-	if len(tokens) == 1 {
-		cmd := tokens[0]
-		// If not builtin and not executable → ring bell
-		if !isBuiltin(cmd) && findExecutable(cmd, paths) == "" {
-			fmt.Print("\a") // Ring bell
-			return nil, 0
+	if start == 0 {
+		// First word (command)
+		if !isBuiltin(current) && findExecutable(current, paths) == "" {
+			fmt.Print("\a") // Bell
+			return nil, start
 		}
-		return completeBuiltins(cmd), 0
+		return completeCommands(current), start
 	}
 
-	// Argument position — autocomplete directory names
-	lastToken := tokens[len(tokens)-1]
-	return completeDirs(lastToken), len(lastToken)
+	// Argument position → complete directories
+	return completeDirs(current), start
 }
 
 
