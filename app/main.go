@@ -585,6 +585,7 @@ func cd(args []string, out *Output) {
 
 func history(args []string, out *Output) {
 	if len(args) == 2 && args[0] == "-r" {
+		// Read history from file
 		path := args[1]
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -593,15 +594,30 @@ func history(args []string, out *Output) {
 		}
 		lines := strings.Split(string(data), "\n")
 		for _, line := range lines {
-			if strings.TrimSpace(line) == "" {
-				continue
+			if strings.TrimSpace(line) != "" {
+				shellHistory = append(shellHistory, line)
 			}
-			shellHistory = append(shellHistory, line)
 		}
 		return
 	}
 
-	// handle `history` and `history <n>`
+	if len(args) == 2 && args[0] == "-w" {
+		// Write history to file
+		path := args[1]
+		file, err := os.Create(path)
+		if err != nil {
+			fmt.Fprintln(out.Stderr, "history: cannot write file:", err)
+			return
+		}
+		defer file.Close()
+		for _, entry := range shellHistory {
+			fmt.Fprintln(file, entry)
+		}
+		// Ensure final newline (Fprintln already does this per line)
+		return
+	}
+
+	// Show history or history <n>
 	total := len(shellHistory)
 	count := total
 	if len(args) == 1 {
@@ -620,6 +636,7 @@ func history(args []string, out *Output) {
 		fmt.Fprintf(out.Stdout, "%5d  %s\n", i+1, shellHistory[i])
 	}
 }
+
 
 func execute(command string, args []string, out *Output) bool {
 	fullPath := findExecutable(command, paths)
