@@ -267,7 +267,6 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 	}
 	current := string(line[start:pos])
 
-	// Reset tab count if line or position changed
 	if current != a.lastLine || pos != a.lastPos {
 		a.lastLine = current
 		a.lastPos = pos
@@ -281,7 +280,6 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return nil, pos
 	}
 
-	// One match → complete it
 	if len(matches) == 1 {
 		match := matches[0]
 		suffix := match[len(current):] + " "
@@ -289,15 +287,12 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return [][]rune{[]rune(suffix)}, pos
 	}
 
-	// Multiple matches → try longest common prefix
 	lcp := longestCommonPrefix(matches)
 	if lcp == current {
-		// Nothing more to complete
 		a.tabCount++
 		if a.tabCount == 1 {
 			fmt.Fprint(os.Stderr, "\a")
 		} else {
-			// Second tab → print all
 			fmt.Println()
 			for _, m := range matches {
 				fmt.Print(m + "  ")
@@ -309,11 +304,96 @@ func (a *AutoCompleter) Do(line []rune, pos int) ([][]rune, int) {
 		return nil, pos
 	}
 
-	// Autocomplete to the LCP suffix
 	suffix := lcp[len(current):]
 	a.lastLine = lcp
 	a.tabCount = 0
 	return [][]rune{[]rune(suffix)}, pos
+}
+
+func executePipeline(line string) bool {
+	parts := strings.Split(line, "|")
+	commands := make([][]string, 0, len(parts))
+
+	// parse each part into command and args + redirections
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		cmd, args := separateCommandArgs(part)
+		args, _, _ = parseRedirections(args)
+		commands = append(commands, append([]string{cmd}, args...))
+		// you can handle redirections later or inside execute function
+	}
+
+	// Prepare pipes
+	// We'll create n-1 pipes for n commands
+	cmds := make([]*exec.Cmd, len(commands))
+	var pipes []struct{ r, w *os.File }
+
+	for i := 0; i < len(commands)-1; i++ {
+		r, w, err := os.Pipe()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "pipe error:", err)
+			return false
+		}
+		pipes = append(pipes, struct{ r, w *os.File }{r, w})
+	}
+
+	// Setup each command's stdin/stdout
+	for i, cmdArgs := range commands {
+		cmdName := cmdArgs[0]
+		cmdArgsSlice := cmdArgs[1:]
+
+		fullPath := findExecutable(cmdName, paths)
+		if fullPath == "" {
+			fmt.Fprintln(os.Stderr, cmdName+": command not found")
+			return false
+		}
+
+		cmd := exec.Command(fullPath, cmdArgsSlice...)
+
+		// stdin
+		if i == 0 {
+			cmd.Stdin = os.Stdin
+		} else {
+			cmd.Stdin = pipes[i-1].r
+		}
+
+		// stdout
+		if i == len(commands)-1 {
+			cmd.Stdout = os.Stdout
+		} else {
+			cmd.Stdout = pipes[i].w
+		}
+
+		// stderr always to os.Stderr for simplicity, you can handle redirection if you want
+		cmd.Stderr = os.Stderr
+
+		cmds[i] = cmd
+	}
+
+	// Start all commands
+	for i, cmd := range cmds {
+		if err := cmd.Start(); err != nil {
+			fmt.Fprintln(os.Stderr, "failed to start command:", err)
+			return false
+		}
+		// Close pipe ends in parent as needed
+		if i > 0 {
+			pipes[i-1].r.Close()
+		}
+		if i < len(cmds)-1 {
+			pipes[i].w.Close()
+		}
+	}
+
+	// Wait all commands
+	for _, cmd := range cmds {
+		cmd.Wait()
+	}
+
+	return true
 }
 
 
@@ -357,20 +437,26 @@ func main() {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		command, args := separateCommandArgs(strings.TrimSpace(line))
-		args, stdoutRedir, stderrRedir := parseRedirections(args)
-
-		out, err := setupOutput(stdoutRedir, stderrRedir)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "Redirection error:", err)
-			continue
-		}
-
-		if builtinFunc, ok := COMMANDS[command]; ok {
-			builtinFunc(args, out)
+		if strings.Contains(line, "|") {
+			ok := executePipeline(line)
+			if !ok {
+				fmt.Fprintln(os.Stderr, "pipeline execution failed")
+			}
 		} else {
-			if !execute(command, args, out) {
-				fmt.Fprintln(os.Stderr, command+": command not found")
+			command, args := separateCommandArgs(line)
+			args, stdoutRedir, stderrRedir := parseRedirections(args)
+			out, err := setupOutput(stdoutRedir, stderrRedir)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Redirection error:", err)
+				continue
+			}
+
+			if builtinFunc, ok := COMMANDS[command]; ok {
+				builtinFunc(args, out)
+			} else {
+				if !execute(command, args, out) {
+					fmt.Fprintln(os.Stderr, command+": command not found")
+				}
 			}
 		}
 	}
