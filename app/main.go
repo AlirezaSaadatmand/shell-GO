@@ -134,10 +134,13 @@ func main() {
 			fullPath := findExecutable(command, paths)
 
 			if fullPath != "" {
-				cmd := exec.Command(fullPath, args...)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				cmd.Stdin = os.Stdin
+				cmd := &exec.Cmd{
+					Path: fullPath,
+					Args: append([]string{command}, args...),
+					Stdin:  os.Stdin,
+					Stdout: os.Stdout,
+					Stderr: os.Stderr,
+				}
 				if err := cmd.Run(); err != nil {
 					fmt.Fprintln(os.Stderr, "Error:", err)
 				}
