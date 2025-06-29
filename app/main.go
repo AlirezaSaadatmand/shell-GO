@@ -132,7 +132,7 @@ func main() {
 		} else {
 			fullPath := command
 
-			if info, err := os.Stat(command); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+			if info, err := os.Stat(command); err == nil && info.Mode().IsRegular(){
 				fullPath = command
 			} else {
 				fullPath = findExecutable(command, paths)
