@@ -39,6 +39,10 @@ Run the shell:
 
     go run main.go
 
+    or
+
+    ./main
+
 You can then type shell commands interactively, like:
 
     $ echo hello
