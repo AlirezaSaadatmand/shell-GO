@@ -1,6 +1,6 @@
 # shell-GO
 
-shell-GO is a simple Unix-like shell implemented in Go. It supports pipelines, built-in commands, input/output redirection, command history, and file-based history management.
+shell-GO is a simple Unix-like shell implemented in Go By completing the challenges of https://codecrafters.io/. It supports pipelines, built-in commands, input/output redirection, command history, and file-based history management.
 
 ## Features
 
