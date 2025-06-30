@@ -1,34 +1,123 @@
-[![progress-banner](https://backend.codecrafters.io/progress/shell/4933b653-7655-466b-a5dd-ab52ee568110)](https://app.codecrafters.io/users/codecrafters-bot?r=2qF)
+# shell-GO
 
-This is a starting point for Go solutions to the
-["Build Your Own Shell" Challenge](https://app.codecrafters.io/courses/shell/overview).
+shell-GO is a simple Unix-like shell implemented in Go. It supports pipelines, built-in commands, input/output redirection, command history, and file-based history management.
 
-In this challenge, you'll build your own POSIX compliant shell that's capable of
-interpreting shell commands, running external programs and builtin commands like
-cd, pwd, echo and more. Along the way, you'll learn about shell command parsing,
-REPLs, builtin commands, and more.
+## Features
 
-**Note**: If you're viewing this repo on GitHub, head over to
-[codecrafters.io](https://codecrafters.io) to try the challenge.
+✅ Execute external commands  
+✅ Support for pipelines (`|`)  
+✅ Input and output redirection (`>`, `>>`, `2>`, `2>>`)  
+✅ Built-in commands:
+- `cd`
+- `echo`
+- `exit`
+- `pwd`
+- `type`
+- `history`
 
-# Passing the first stage
+✅ Autocompletion (tab)  
+✅ Command history in memory  
+✅ Load/Write/Append command history from/to file  
+✅ Automatically load from `$HISTFILE` on startup and save to it on exit  
+✅ Proper handling of built-ins inside pipelines  
 
-The entry point for your `shell` implementation is in `app/main.go`. Study and
-uncomment the relevant code, and push your changes to pass the first stage:
+---
 
-```sh
-git commit -am "pass 1st stage" # any msg
-git push origin master
+## Installation
+
+Make sure you have Go installed (1.18+ recommended).
+
+```bash
+git clone https://github.com/AlirezaSaadatmand/shell-GO.git
+cd shell-GO/app
+go build main.go
 ```
 
-Time to move on to the next stage!
+Usage
+-----
+Run the shell:
 
-# Stage 2 & beyond
+    go run main.go
 
-Note: This section is for stages 2 and beyond.
+You can then type shell commands interactively, like:
 
-1. Ensure you have `go (1.24)` installed locally
-1. Run `./your_program.sh` to run your program, which is implemented in
-   `app/main.go`.
-1. Commit your changes and run `git push origin master` to submit your solution
-   to CodeCrafters. Test output will be streamed to your terminal.
+    $ echo hello
+    hello
+
+    $ ls | grep go | wc
+
+
+Environment Variables
+---------------------
+PATH:
+    Used to locate executables.
+
+HISTFILE:
+    If set, GoShell will:
+    - Load history from the file on startup.
+    - Append new commands to the file on exit.
+
+
+Built-in Commands
+-----------------
+
+### cd [dir]
+    Change the current directory. Use "cd -" to switch to the last visited directory.
+
+### pwd
+    Print the current working directory.
+
+### echo [args...]
+    Print arguments to stdout.
+
+### exit [status]
+    Exit the shell with an optional status code. Saves history to file if HISTFILE is set.
+
+### type <command>
+    Tell whether a command is a shell built-in or an external executable.
+
+### history
+    Print command history with line numbers.
+
+    Variants:
+      history <n>         Show last n entries
+      history -r <file>   Read history from file
+      history -w <file>   Write current history to file (overwrite)
+      history -a <file>   Append new history entries to file
+
+
+Command Line Editing
+--------------------
+- Use arrow keys for history navigation.
+- Press Tab for autocompletion.
+    - Supports partial matches and common prefixes.
+    - Pressing Tab twice shows all possible completions.
+
+
+Redirection
+-----------
+\> or 1>      Redirect stdout (overwrite)
+
+\>> or 1>>    Redirect stdout (append)
+
+2>           Redirect stderr (overwrite)
+
+2>>          Redirect stderr (append)
+
+
+Examples
+--------
+    $ echo hello > out.txt
+    $ cat out.txt | grep h
+    hello
+
+    $ ls -la / | grep bin | wc -l
+
+
+Known Limitations
+-----------------
+- No support for job control (fg, bg, etc.)
+- No support for command substitution ($(...))
+- No background jobs (&)
+- No environment variable setting/exporting
+`
